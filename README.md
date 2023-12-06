@@ -12,12 +12,12 @@ Download this repo first, then download 3rd party toolboxes accordingly.
 
 2. copy rotate_yxw.m to the folder \pulseq\matlab\+mr\
 In pulseq v.1.4.1, the mr.rotate() does not take `system` as an input, thus have no idea about system properties and uses default gradient and slew. This would fail if strong gradient and slew are used.
-### For reconstruction
+### For recon
 Download and add the following toolbox and files to Matlab path
 - [bart](https://github.com/mrirecon/bart)
 - [gridmat.m](https://github.com/mribri999/MRSignalsSeqs/blob/master/Matlab/gridmat.m)
 - [voronoidens.m](https://github.com/zenghf/NMRTool/blob/aa1199937a7252887f5ae64612e8d131e10c93e0/csMRI/utils/voronoidens.m)
-- (optional) [mapVBVD](https://github.com/pehses/mapVBVD), needed when you want to reconstrcut from Siemens rawdata
+- (optional) [mapVBVD](https://github.com/pehses/mapVBVD), needed when you want to recon from Siemens rawdata
 
 
 

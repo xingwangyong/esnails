@@ -231,27 +231,25 @@ gy_spi_out = mr.makeArbitraryGrad('y',spiral_grad_shape(2,:),sys,'Delay',sys.adc
 gx_spi_out.first=0;
 gy_spi_out.first=0;
 
-% ramp grad to 0
-gx_rewinder_dur = ceil(abs(spiral_grad_shape(1,end))/sys.maxSlew/seq.gradRasterTime)*seq.gradRasterTime;
-gy_rewinder_dur = ceil(abs(spiral_grad_shape(2,end))/sys.maxSlew/seq.gradRasterTime)*seq.gradRasterTime;
-gx_gy_rewinder_max_dur = max(gx_rewinder_dur,gy_rewinder_dur);
-gx_rewinder_out=mr.makeExtendedTrapezoid('x','times',[0,gx_gy_rewinder_max_dur],'amplitudes',[spiral_grad_shape(1,end),0]);
-gy_rewinder_out=mr.makeExtendedTrapezoid('y','times',[0,gx_gy_rewinder_max_dur],'amplitudes',[spiral_grad_shape(2,end),0]);
+% spoil
+gz_spoil=mr.makeTrapezoid('z',sys,'Area',1/fov*Nx*4);
+gx_spoil=mr.makeExtendedTrapezoid('x','times',[0 mr.calcDuration(gz_spoil)],'amplitudes',[spiral_grad_shape(1,end),0]); %todo: make a really good spoiler
+gy_spoil=mr.makeExtendedTrapezoid('y','times',[0 mr.calcDuration(gz_spoil)],'amplitudes',[spiral_grad_shape(2,end),0]); %todo: make a really good spoiler
 
 
 %% timing
 rfCenterInclDelay    = rf90.delay + mr.calcRfCenter(rf90);
 rf180centerInclDelay = rf180.delay + mr.calcRfCenter(rf180);
-delayTE1     = TE/2   -   (mr.calcDuration(gs_ex)-rfCenterInclDelay)   -  mr.calcDuration(gzReph) - 0.5*mr.calcDuration(GSref);
+delayTE1     = TE/2   -   (mr.calcDuration(gs_ex)-rfCenterInclDelay)   -  mr.calcDuration(gzReph) - rf180centerInclDelay;
 delayTE1     = ceil(delayTE1/sys.gradRasterTime)*sys.gradRasterTime;
-delayTE2     = TE/2   -  0.5*mr.calcDuration(GSref);
+delayTE2     = TE/2   -  (mr.calcDuration(GSref)-rf180centerInclDelay);
 delayTE2     = ceil(delayTE2/sys.gradRasterTime)*sys.gradRasterTime;
-gradTimeDiff_b0_bNonZero1 = mr.calcDuration(GS7) + 0.5*mr.calcDuration(GS4)  -  0.5*mr.calcDuration(GSref);
-gradTimeDiff_b0_bNonZero1 = ceil(gradTimeDiff_b0_bNonZero1/sys.gradRasterTime)*sys.gradRasterTime;
-gradTimeDiff_b0_bNonZero2 = mr.calcDuration(GS5) + 0.5*mr.calcDuration(GS4)  -  0.5*mr.calcDuration(GSref);
-gradTimeDiff_b0_bNonZero2 = ceil(gradTimeDiff_b0_bNonZero2/sys.gradRasterTime)*sys.gradRasterTime;
+delayTE1_b0  = TE/2   -   (mr.calcDuration(gs_ex)-rfCenterInclDelay)   -  mr.calcDuration(gzReph) - mr.calcDuration(GS7)  -  rf180centerInclDelay;
+delayTE1_b0  = ceil(delayTE1_b0/sys.gradRasterTime)*sys.gradRasterTime;
+delayTE2_b0  = TE/2   -  mr.calcRfCenter(rf180) - sys.rfRingdownTime  - mr.calcDuration(GS5);
+delayTE2_b0  = ceil(delayTE2_b0/sys.gradRasterTime)*sys.gradRasterTime;
 
-time_1_slice = mr.calcDuration(gz_fs) + rfCenterInclDelay + 0.5*TE + 0.5*TE + mr.calcDuration(gx_spi_out,gy_spi_out,adc)  +  mr.calcDuration(gx_rewinder_out,gy_rewinder_out);
+time_1_slice = mr.calcDuration(gz_fs) + rfCenterInclDelay + 0.5*TE + 0.5*TE + mr.calcDuration(gx_spi_out,gy_spi_out,adc)  +  mr.calcDuration(gx_spoil,gy_spoil,gz_spoil);
 delayTR      = ceil(  (TR- Nslices*time_1_slice)  /  seq.gradRasterTime  )*seq.gradRasterTime;
 
 fprintf('<strong>Minimal TR is %.2f, current TR is %.2f\n</strong>', time_1_slice*Nslices, TR);
@@ -261,8 +259,8 @@ delay_after_1slice = ceil(delay_after_1slice/sys.blockDurationRaster)*sys.blockD
 fprintf('<strong>Delay after each shot is %.2f\n</strong>',delay_after_1slice)
 assert(delayTE1>=0);
 assert(delayTE2>=0);
-assert(gradTimeDiff_b0_bNonZero1>=0);
-assert(gradTimeDiff_b0_bNonZero2>=0);
+assert(delayTE1_b0>=0);
+assert(delayTE2_b0>=0);
 assert(all(delayTR>=0));
 
 
@@ -324,11 +322,11 @@ for iter_bdir = 1:num_bdir
             seq.addBlock(gzReph);
 
             if isb0
-                seq.addBlock(mr.makeDelay(delayTE1 - gradTimeDiff_b0_bNonZero1));
-                    seq.addBlock(GS7);
-                    seq.addBlock(rf180,GS4);
-                    seq.addBlock(GS5);
-                seq.addBlock(mr.makeDelay(delayTE2 - gradTimeDiff_b0_bNonZero2));
+                seq.addBlock(mr.makeDelay(delayTE1_b0));
+                seq.addBlock(GS7);
+                seq.addBlock(rf180,GS4);
+                seq.addBlock(GS5);
+                seq.addBlock(mr.makeDelay(delayTE2_b0));
             else % no crusher needed for bvalue~=0
                 seq.addBlock(mr.makeDelay(delayTE1),gDiff_x,gDiff_y,gDiff_z);
                 seq.addBlock(rf180,GSref);
@@ -337,7 +335,7 @@ for iter_bdir = 1:num_bdir
 
             % acq
             seq.addBlock(mr.rotate_yxw('z',phi,sys,gx_spi_out,gy_spi_out,adc));
-            seq.addBlock(mr.rotate_yxw('z',phi,sys,gx_rewinder_out,gy_rewinder_out));
+            seq.addBlock(mr.rotate_yxw('z',phi,sys,gx_spoil,gy_spoil,gz_spoil));
 
             if delay_after_1slice > 0
                 seq.addBlock(mr.makeDelay(delay_after_1slice));
