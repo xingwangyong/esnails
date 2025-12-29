@@ -2,7 +2,7 @@
 
 Enhancing Self-Navigated Interleaved Spiral with ESPIRiT (eSNAILS). Use ESPIRiT to improve the composite sensitivity map estimation in multi-shot spiral dMRI. 
 
-[Search](https://meetingsearch.ismrm.org/) ISMRM 2024 abstract #1904
+[ISMRM 2024 abstract #1904](https://archive.ismrm.org/2024/1904.html) 
 
 ![](esnails.JPG)
 
